@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import './reset.css';
+@import './variables.css';
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* Mobile: pad bottom for navbar */
+#root {
+  min-height: 100vh;
+  padding-bottom: var(--navbar-height);
+}
+
+/* Desktop: pad left for sidebar, no bottom padding */
+@media (min-width: 768px) {
+  #root {
+    padding-bottom: 0;
+    padding-left: var(--sidebar-width);
+  }
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: var(--text-light); border-radius: 4px; }
+
+@keyframes fadeIn {
+  from { opacity:0; transform:translateY(10px) }
+  to { opacity:1; transform:translateY(0) }
+}
+@keyframes slideUp {
+  from { opacity:0; transform:translateY(20px) }
+  to { opacity:1; transform:translateY(0) }
+}
+@keyframes scaleIn {
+  from { opacity:0; transform:scale(.95) }
+  to { opacity:1; transform:scale(1) }
+}
+@keyframes spin {
+  from { transform: rotate(0deg) }
+  to { transform: rotate(360deg) }
+}
+
+/* ═══ RESPONSIVE UTILITIES ═══ */
+.desktop-only { display: none; }
+.mobile-only { display: block; }
+
+@media (min-width: 768px) {
+  .desktop-only { display: block; }
+  .mobile-only { display: none; }
+}
