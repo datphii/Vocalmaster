@@ -19,7 +19,7 @@ export function useAppState() {
       setUser(u)
       if (adminUnsub) { adminUnsub(); adminUnsub = null }
       if (u) {
-        loadUserLearned(u.uid); loadMyWords(u.uid); trackUserLogin(u)
+        loadUserLearned(u.uid); migratePublicWords(u.uid); loadMyWords(u.uid); trackUserLogin(u)
         adminUnsub = onSnapshot(doc(db, 'app_users', u.uid), (snap) => {
           const newAdmin = snap.exists() ? snap.data().isAdmin === true : ADMIN_EMAILS.includes(u.email)
           setIsAdmin(prev => prev === newAdmin ? prev : newAdmin)
@@ -66,6 +66,32 @@ export function useAppState() {
         }
       })
     } catch (e) { console.log('Learned load error:', e) }
+  }
+
+  // One-time migration: copy custom_words (old public collection) → user's my_words
+  const migratePublicWords = async (uid) => {
+    const migrationKey = `migrated_public_words_${uid}`
+    if (LS.get(migrationKey, false)) return
+    try {
+      const snap = await getDocs(collection(db, 'custom_words')).catch(() => null)
+      if (!snap || snap.empty) { LS.set(migrationKey, true); return }
+      const existing = await getDocs(collection(db, 'users', uid, 'my_words')).catch(() => null)
+      const existingWords = new Set(existing ? existing.docs.map(d => d.data().word?.toLowerCase()) : [])
+      let migrated = 0
+      for (const d of snap.docs) {
+        const data = d.data()
+        if (!existingWords.has(data.word?.toLowerCase())) {
+          await addDoc(collection(db, 'users', uid, 'my_words'), {
+            ...data,
+            migratedFrom: 'custom_words',
+            migratedAt: new Date().toISOString(),
+          }).catch(() => {})
+          migrated++
+        }
+      }
+      LS.set(migrationKey, true)
+      if (migrated > 0) console.log(`Migrated ${migrated} words from custom_words`)
+    } catch (e) { console.log('Migration error:', e) }
   }
 
   const login = async () => {
