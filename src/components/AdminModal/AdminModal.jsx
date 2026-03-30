@@ -5,7 +5,7 @@ import { LS } from '../../utils/index.js'
 import { aiGenerate } from '../../utils/aiGenerate.js'
 
 export default function AdminModal({ onClose, onSave, editWord, groups, setGroups }) {
-  const [form, setForm] = useState(editWord || { word: '', phonetic: '', cat: 'general', group: 'GD&T Basics', def: '', ex: '', sentence: '' })
+  const [form, setForm] = useState(editWord || { word: '', phonetic: '', cat: 'noun', group: 'General', def: '', ex: '', sentence: '' })
   const [saving, setSaving] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [tab, setTab] = useState('word')

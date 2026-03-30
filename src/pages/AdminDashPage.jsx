@@ -3,6 +3,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../firebase.js'
 import TopBar from '../components/TopBar/TopBar.jsx'
 import { useIsDesktop } from '../utils/index.js'
+import { catColor } from '../data/vocab.js'
 
 export default function AdminDashPage({ state }) {
   const desk = useIsDesktop()
@@ -10,6 +11,12 @@ export default function AdminDashPage({ state }) {
   const [userStats, setUserStats] = useState([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('overview')
+
+  // Words tab state
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [userWords, setUserWords] = useState([])
+  const [userLearned, setUserLearned] = useState(new Set())
+  const [wordsLoading, setWordsLoading] = useState(false)
 
   useEffect(() => { if (isAdmin) loadData() }, [isAdmin])
 
@@ -37,6 +44,23 @@ export default function AdminDashPage({ state }) {
     setLoading(false)
   }
 
+  const loadUserWords = async (u) => {
+    setSelectedUser(u)
+    setWordsLoading(true)
+    try {
+      const [wordsSnap, progressSnap] = await Promise.all([
+        getDocs(collection(db, 'users', u.uid, 'my_words')).catch(() => null),
+        getDocs(collection(db, 'users', u.uid, 'progress')).catch(() => null),
+      ])
+      const words = wordsSnap ? wordsSnap.docs.map(d => ({ ...d.data(), fid: d.id })) : []
+      let learnedIds = new Set()
+      if (progressSnap) progressSnap.docs.forEach(d => { if (d.data().words) learnedIds = new Set(d.data().words) })
+      setUserWords(words)
+      setUserLearned(learnedIds)
+    } catch (e) { console.log('Load user words error:', e) }
+    setWordsLoading(false)
+  }
+
   const totalUsers = userStats.length
   const totalCustomWords = userStats.reduce((s, u) => s + u.wordCount, 0)
   const totalLearned = userStats.reduce((s, u) => s + u.learnedCount, 0)
@@ -47,6 +71,14 @@ export default function AdminDashPage({ state }) {
     return { date: ds, day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()], count: userStats.filter(u => u.loginDays?.includes(ds)).length }
   })
   const maxLogin = Math.max(...last7.map(d => d.count), 1)
+
+  // Group words by group field
+  const wordsByGroup = userWords.reduce((acc, w) => {
+    const g = w.group || 'Ungrouped'
+    if (!acc[g]) acc[g] = []
+    acc[g].push(w)
+    return acc
+  }, {})
 
   if (!isAdmin) return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '60px 16px', textAlign: 'center' }}>
@@ -59,10 +91,10 @@ export default function AdminDashPage({ state }) {
   return (
     <div style={{ maxWidth: desk ? 1200 : 600, margin: '0 auto', padding: desk ? '24px 32px' : '16px 16px 24px' }}>
       {desk
-        ? <TopBar user={user} isAdmin={isAdmin} login={login} logout={logout} title="Admin Dashboard" subtitle={`${totalUsers} users · ${totalCustomWords} custom words`} />
+        ? <TopBar user={user} isAdmin={isAdmin} login={login} logout={logout} title="Admin Dashboard" subtitle={`${totalUsers} users · ${totalCustomWords} words`} />
         : <>
             <div style={{ fontSize: 24, fontWeight: 900, color: 'var(--text-dark)', marginBottom: 4 }}>Admin Dashboard</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>{totalUsers} users · {totalCustomWords} custom words</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 20 }}>{totalUsers} users · {totalCustomWords} words</div>
           </>
       }
 
@@ -71,7 +103,7 @@ export default function AdminDashPage({ state }) {
         <div style={{ display: 'grid', gridTemplateColumns: desk ? '1fr 1fr 1fr 1fr' : '1fr 1fr', gap: 12, marginBottom: 24 }}>
           {[
             { icon: '👥', n: totalUsers, l: 'Total Users', c: 'var(--primary)', bg: 'var(--primary-light)' },
-            { icon: '📝', n: totalCustomWords, l: 'Custom Words', c: 'var(--purple)', bg: 'var(--purple-light)' },
+            { icon: '📝', n: totalCustomWords, l: 'Total Words', c: 'var(--purple)', bg: 'var(--purple-light)' },
             { icon: '✅', n: totalLearned, l: 'Words Learned', c: 'var(--green)', bg: 'var(--green-light)' },
             { icon: '📅', n: todayLogins, l: 'Logins Today', c: 'var(--orange)', bg: 'var(--orange-light)' },
           ].map((s, i) => (
@@ -84,11 +116,12 @@ export default function AdminDashPage({ state }) {
         </div>
 
         <div style={{ display: 'flex', background: 'var(--surface)', borderRadius: 14, padding: 4, marginBottom: 20, boxShadow: 'var(--shadow-sm)' }}>
-          {[{ k: 'overview', l: '📊 Overview' }, { k: 'users', l: '👥 Users' }, { k: 'activity', l: '📅 Activity' }].map(t => (
+          {[{ k: 'overview', l: '📊 Overview' }, { k: 'users', l: '👥 Users' }, { k: 'words', l: '📚 Words' }, { k: 'activity', l: '📅 Activity' }].map(t => (
             <button key={t.k} onClick={() => setTab(t.k)} style={{ flex: 1, padding: '10px 8px', borderRadius: 10, border: 'none', background: tab === t.k ? 'var(--primary)' : 'transparent', color: tab === t.k ? 'white' : 'var(--text-secondary)', fontWeight: 700, fontSize: 12, cursor: 'pointer', transition: 'all .2s' }}>{t.l}</button>
           ))}
         </div>
 
+        {/* OVERVIEW */}
         {tab === 'overview' && <div style={{ display: desk ? 'grid' : 'block', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
           <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 20, boxShadow: 'var(--shadow-sm)', marginBottom: desk ? 0 : 16 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-dark)', marginBottom: 16 }}>Logins (last 7 days)</div>
@@ -119,6 +152,7 @@ export default function AdminDashPage({ state }) {
           </div>
         </div>}
 
+        {/* USERS */}
         {tab === 'users' && <div style={{ background: 'var(--surface)', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: desk ? '2fr 1fr 1fr 1fr 100px' : '2fr 1fr 80px', gap: 8, padding: '14px 18px', background: 'var(--primary)', color: 'white', fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>
             <span>User</span>{desk && <span>Words</span>}<span>Learned</span>{desk && <span>Last Login</span>}<span>Role</span>
@@ -147,6 +181,89 @@ export default function AdminDashPage({ state }) {
           ))}
         </div>}
 
+        {/* WORDS */}
+        {tab === 'words' && <div style={{ display: desk ? 'grid' : 'block', gridTemplateColumns: '280px 1fr', gap: 20 }}>
+          {/* User list */}
+          <div style={{ background: 'var(--surface)', borderRadius: 16, overflow: 'hidden', boxShadow: 'var(--shadow-sm)', height: 'fit-content' }}>
+            <div style={{ padding: '14px 18px', background: 'var(--primary)', color: 'white', fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase' }}>Select User</div>
+            {userStats.map((u, i) => (
+              <div key={u.uid} onClick={() => loadUserWords(u)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--border-light)', cursor: 'pointer', background: selectedUser?.uid === u.uid ? 'var(--primary-light)' : 'transparent', transition: 'background .15s' }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', overflow: 'hidden', background: 'var(--primary-light)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--primary)' }}>
+                  {u.photoURL ? <img src={u.photoURL} alt="" style={{ width: 28, height: 28 }} /> : (u.displayName?.[0] || '?')}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: selectedUser?.uid === u.uid ? 'var(--primary)' : 'var(--text-dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName || 'No name'}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{u.wordCount} words · {u.learnedCount} learned</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Words panel */}
+          <div>
+            {!selectedUser && (
+              <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: 'var(--shadow-sm)', color: 'var(--text-secondary)' }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>👈</div>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Select a user to view their vocabulary</div>
+              </div>
+            )}
+
+            {selectedUser && wordsLoading && (
+              <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: 'var(--shadow-sm)', color: 'var(--text-secondary)' }}>Loading...</div>
+            )}
+
+            {selectedUser && !wordsLoading && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: 'var(--primary)' }}>
+                    {selectedUser.photoURL ? <img src={selectedUser.photoURL} alt="" style={{ width: 36, height: 36 }} /> : (selectedUser.displayName?.[0] || '?')}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-dark)' }}>{selectedUser.displayName || 'No name'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{userWords.length} words · {userLearned.size} learned ({userWords.length > 0 ? Math.round(userLearned.size / userWords.length * 100) : 0}%)</div>
+                  </div>
+                </div>
+
+                {userWords.length === 0
+                  ? <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 40, textAlign: 'center', boxShadow: 'var(--shadow-sm)', color: 'var(--text-secondary)' }}>
+                      <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
+                      <div style={{ fontSize: 14 }}>No words added yet</div>
+                    </div>
+                  : Object.entries(wordsByGroup).map(([group, words]) => (
+                      <div key={group} style={{ background: 'var(--surface)', borderRadius: 16, marginBottom: 12, overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                        <div style={{ padding: '12px 16px', background: 'var(--primary-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)' }}>📁 {group}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            {words.filter(w => userLearned.has(w.fid)).length}/{words.length} learned
+                          </span>
+                        </div>
+                        {words.map((w, i) => {
+                          const isL = userLearned.has(w.fid)
+                          return (
+                            <div key={w.fid} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: i < words.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: isL ? 'var(--green)' : 'var(--border)', flexShrink: 0 }} />
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-dark)' }}>{w.word}</span>
+                                  <span style={{ fontSize: 10, color: 'var(--primary)', fontFamily: 'monospace' }}>{w.phonetic}</span>
+                                  {w.cat && <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10, background: catColor(w.cat) + '18', color: catColor(w.cat) }}>{w.cat}</span>}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginTop: 2 }}>{w.def}</div>
+                              </div>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: isL ? 'var(--green)' : 'var(--text-light)', whiteSpace: 'nowrap' }}>{isL ? '✓ Learned' : 'Not yet'}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))
+                }
+              </>
+            )}
+          </div>
+        </div>}
+
+        {/* ACTIVITY */}
         {tab === 'activity' && <div>
           <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 20, boxShadow: 'var(--shadow-sm)', marginBottom: 16 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-dark)', marginBottom: 16 }}>Daily Logins (30 days)</div>
