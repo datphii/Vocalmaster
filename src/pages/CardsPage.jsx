@@ -15,7 +15,7 @@ export default function CardsPage({ state }) {
   const loc = useLocation()
   const params = new URLSearchParams(loc.search)
   const initMode = params.get('mode') || 'card'
-  const { allWords, allGroups, learned, toggleLearned, isAdmin, delWord, dark, setDark, user, login, logout, saveWord, groups, setGroups } = state
+  const { allWords, allGroups, learned, toggleLearned, delWord, user, login, logout, saveWord, groups, setGroups } = state
   const [mode, setMode] = useState(initMode)
   const [search, setSearch] = useState('')
   const [cat, setCat] = useState(params.get('cat') || 'all')
@@ -77,7 +77,6 @@ export default function CardsPage({ state }) {
                 <div key={v.fid || v.id} style={{ background: 'var(--surface)', borderRadius: 16, padding: '16px 18px', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', transition: 'transform .2s, box-shadow .2s', animation: `fadeIn .3s ease ${Math.min(i * .03, .3)}s both`, position: 'relative' }}
                   onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = 'var(--shadow-md)' }}
                   onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}>
-                  {v.fromFS && <div style={{ position: 'absolute', top: 12, right: 12, background: v.isPrivate ? 'var(--purple)' : 'var(--green)', color: 'white', fontSize: 9, fontWeight: 700, padding: '3px 8px', borderRadius: 20 }}>{v.isPrivate ? 'MY WORD' : 'PUBLIC'}</div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <span style={{ background: catColor(v.cat) + '18', color: catColor(v.cat), fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>{v.cat}</span>
                   </div>
@@ -88,7 +87,7 @@ export default function CardsPage({ state }) {
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button onClick={e => { e.stopPropagation(); speak(v.word) }} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔊</button>
                     <button onClick={e => { e.stopPropagation(); toggleLearned(v.id || v.fid) }} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: isL ? 'var(--green)' : 'var(--border-light)', color: isL ? 'white' : 'var(--text-light)', fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>✓</button>
-                    {((isAdmin && v.fromFS) || v.isPrivate) && <>
+                    {v.fromFS && <>
                       <button onClick={e => { e.stopPropagation(); setEditWord(v); setShowAdmin(true) }} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✏️</button>
                       <button onClick={e => { e.stopPropagation(); if (confirm('Delete?')) delWord(v.fid) }} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'var(--pink-light)', color: 'var(--accent)', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🗑</button>
                     </>}

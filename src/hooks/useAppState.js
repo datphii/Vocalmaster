@@ -8,10 +8,9 @@ import { LS } from '../utils/index.js'
 export function useAppState() {
   const [user, setUser] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [publicWords, setPublicWords] = useState([])
   const [myWords, setMyWords] = useState([])
   const [learned, setLearned] = useState(() => new Set(LS.get('learned', [])))
-  const [groups, setGroups] = useState(() => LS.get('groups', ['GD&T Basics']))
+  const [groups, setGroups] = useState(() => LS.get('groups', ['General', 'Work', 'Academic']))
   const [dark, setDark] = useState(() => LS.get('dark', false))
 
   useEffect(() => {
@@ -32,8 +31,6 @@ export function useAppState() {
     return () => { unsub(); if (adminUnsub) adminUnsub() }
   }, [])
 
-  useEffect(() => { loadPublicWords() }, [])
-
   useEffect(() => {
     LS.set('dark', dark)
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -48,22 +45,14 @@ export function useAppState() {
     }
   }, [learned, user])
 
-  const loadPublicWords = async () => {
-    try {
-      const snap = await getDocs(query(collection(db, 'custom_words'), orderBy('createdAt', 'desc')))
-      const w = snap.docs.map(d => ({ ...d.data(), fid: d.id, fromFS: true, isPublic: true }))
-      setPublicWords(w)
-      const fg = [...new Set(w.map(x => x.group).filter(Boolean))]
-      setGroups([...new Set(['GD&T Basics', ...LS.get('groups', []), ...fg])])
-    } catch (e) { console.log('Public words error:', e) }
-  }
-
   const loadMyWords = async (uid) => {
     if (!uid) return
     try {
       const snap = await getDocs(query(collection(db, 'users', uid, 'my_words'), orderBy('createdAt', 'desc')))
-      const w = snap.docs.map(d => ({ ...d.data(), fid: d.id, fromFS: true, isPrivate: true }))
+      const w = snap.docs.map(d => ({ ...d.data(), fid: d.id, fromFS: true }))
       setMyWords(w)
+      const fg = [...new Set(w.map(x => x.group).filter(Boolean))]
+      if (fg.length) setGroups(prev => [...new Set([...prev, ...fg])])
     } catch (e) { console.log('My words error:', e) }
   }
 
@@ -100,8 +89,7 @@ export function useAppState() {
       const today = new Date().toISOString().split('T')[0]
       const ref = doc(db, 'app_users', u.uid)
       await setDoc(ref, {
-        uid: u.uid,
-        email: u.email,
+        uid: u.uid, email: u.email,
         displayName: u.displayName || '',
         photoURL: u.photoURL || '',
         lastLogin: new Date().toISOString(),
@@ -139,37 +127,23 @@ export function useAppState() {
   }
 
   const saveWord = async (form, existingId) => {
+    if (!user) return false
     try {
       if (existingId) {
-        const isPublicWord = publicWords.some(w => w.fid === existingId)
-        if (isPublicWord && isAdmin) {
-          await updateDoc(doc(db, 'custom_words', existingId), { ...form, updatedAt: new Date().toISOString() })
-        } else if (user) {
-          await updateDoc(doc(db, 'users', user.uid, 'my_words', existingId), { ...form, updatedAt: new Date().toISOString() })
-        }
+        await updateDoc(doc(db, 'users', user.uid, 'my_words', existingId), { ...form, updatedAt: new Date().toISOString() })
       } else {
-        if (isAdmin) {
-          await addDoc(collection(db, 'custom_words'), { ...form, createdAt: new Date().toISOString(), addedBy: user.email })
-        } else if (user) {
-          await addDoc(collection(db, 'users', user.uid, 'my_words'), { ...form, createdAt: new Date().toISOString(), addedBy: user.email })
-        }
+        await addDoc(collection(db, 'users', user.uid, 'my_words'), { ...form, createdAt: new Date().toISOString(), addedBy: user.email })
       }
-      await loadPublicWords()
-      if (user) await loadMyWords(user.uid)
+      await loadMyWords(user.uid)
       return true
     } catch (e) { alert('Save error: ' + e.message); return false }
   }
 
   const delWord = async (id) => {
+    if (!user) return
     try {
-      const isPublicWord = publicWords.some(w => w.fid === id)
-      if (isPublicWord && isAdmin) {
-        await deleteDoc(doc(db, 'custom_words', id))
-      } else if (user) {
-        await deleteDoc(doc(db, 'users', user.uid, 'my_words', id))
-      }
-      await loadPublicWords()
-      if (user) await loadMyWords(user.uid)
+      await deleteDoc(doc(db, 'users', user.uid, 'my_words', id))
+      await loadMyWords(user.uid)
     } catch (e) { alert('Delete error: ' + e.message) }
   }
 
@@ -177,9 +151,8 @@ export function useAppState() {
     setLearned(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
   }, [])
 
-  const allWords = useMemo(() => [...myWords, ...publicWords, ...defaultVocab], [myWords, publicWords])
-  const customWords = useMemo(() => [...myWords, ...publicWords], [myWords, publicWords])
+  const allWords = useMemo(() => [...myWords, ...defaultVocab], [myWords])
   const allGroups = useMemo(() => [...new Set(allWords.map(w => w.group).filter(Boolean))], [allWords])
 
-  return { user, isAdmin, allWords, customWords, allGroups, learned, groups, setGroups, dark, setDark, login, logout, saveWord, delWord, toggleLearned, loadAllUsers, toggleAdmin }
+  return { user, isAdmin, allWords, allGroups, learned, groups, setGroups, dark, setDark, login, logout, saveWord, delWord, toggleLearned, loadAllUsers, toggleAdmin }
 }
